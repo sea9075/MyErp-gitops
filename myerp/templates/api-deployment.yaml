@@ -34,6 +34,21 @@ spec:
             {{- toYaml .Values.api.resources | nindent 12 }}
           # /healthz 是 Program.cs 專門為這裡新增的端點（不用 Swagger，正式環境本來就關閉；
           # 也不用 JWT），見 MyErp.Api/Program.cs 2026-09-16 的變更。
+          #
+          # 2026-09-16 補上 startupProbe（見 MyErp.Infra/DependencyInjection.cs 同一天的
+          # EnableRetryOnFailure 修正、部署時實際踩到的坑）：Program.cs 在 Kestrel 真正開始
+          # 監聽 8080 之前，會先做完整個 DB migration（含 EF Core 的連線重試，最多 5 次、
+          # 每次最長間隔到 30 秒），這段時間 /healthz 完全連不上、不是「回應慢」而是「還沒開始
+          # 監聽」。如果沒有 startupProbe，readiness/livenessProbe 原本的寬限期（各約 40 秒、
+          # 80 秒）會等不到重試跑完就把 Pod 判定成不健康、直接砍掉重啟，形成「永遠重試不完」
+          # 的循環。startupProbe 成功一次之前，K8s 不會去看 liveness/readinessProbe，兩者
+          # 之後才接手做正常的健康監控。
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /healthz
