@@ -1,0 +1,21 @@
+# 取代 Infra-Progress.md §17 用 kubectl 手動建立的測試用 placeholder-route，改由這個
+# chart（ArgoCD）管理，backendRef 指向真正的 myerp-api Service，不再指向 nginxdemos/hello。
+#
+# 沿用同一個 Gateway（myerp-gateway，這個 chart 不管理它），套用後請手動清掉舊資源：
+#   kubectl delete httproute placeholder-route -n myerp
+#   kubectl delete deployment placeholder -n myerp
+#   kubectl delete service placeholder -n myerp
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-api-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Values.route.gatewayName }}
+  hostnames:
+    - "{{ .Values.route.hostname }}"
+  rules:
+    - backendRefs:
+        - name: myerp-api
+          port: 80

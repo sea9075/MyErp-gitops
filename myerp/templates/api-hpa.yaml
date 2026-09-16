@@ -1,0 +1,33 @@
+{{- if .Values.api.hpa.enabled }}
+# 注意：這個 HPA 依賴叢集裝了 metrics-server（提供 metrics.k8s.io API 的 CPU/記憶體使用率
+# 數據），Infra-Progress.md §16 目前只裝了 kube-prometheus-stack（Prometheus 生態），
+# 沒有裝 metrics-server，HPA 建立後会一直抓不到 metrics、無法動作，需要額外裝：
+#   helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+#   helm install metrics-server metrics-server/metrics-server -n kube-system
+# （見 README「叢集端一次性設定」）。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myerp-api
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myerp-api
+  minReplicas: {{ .Values.api.hpa.minReplicas }}
+  maxReplicas: {{ .Values.api.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.hpa.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.hpa.targetMemoryUtilizationPercentage }}
+{{- end }}

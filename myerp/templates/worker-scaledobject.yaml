@@ -1,0 +1,22 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: myerp-worker
+  namespace: {{ .Values.namespace }}
+spec:
+  scaleTargetRef:
+    name: myerp-worker
+  minReplicaCount: {{ .Values.worker.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.worker.keda.maxReplicaCount }}
+  pollingInterval: {{ .Values.worker.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.worker.keda.cooldownPeriod }}
+  triggers:
+    - type: azure-servicebus
+      metadata:
+        queueName: {{ .Values.worker.keda.queueName }}
+        messageCount: "{{ .Values.worker.keda.messageCount }}"
+        # 注意：這裡故意不填 "namespace"（Service Bus 命名空間）——那個欄位只有搭配
+        # pod identity / workload identity 認證時才需要，用連線字串（TriggerAuthentication）
+        # 認證時完全不需要，連線字串本身就已經包含要連去哪個命名空間的資訊。
+      authenticationRef:
+        name: myerp-worker-servicebus-auth

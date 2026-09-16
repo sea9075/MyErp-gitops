@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myerp-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: myerp-worker
+spec:
+  # 這裡的 replicas 只在 ScaledObject 生效前有意義，之後由 KEDA 動態接管
+  # （見 worker-scaledobject.yaml）。
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app: myerp-worker
+  template:
+    metadata:
+      labels:
+        app: myerp-worker
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecretName }}
+      containers:
+        - name: myerp-worker
+          image: "{{ .Values.image.worker.repository }}:{{ .Values.image.worker.tag }}"
+          imagePullPolicy: {{ .Values.image.worker.pullPolicy }}
+          # 跟 api 共用同一包 Secret：worker 用得到 ConnectionStrings__DefaultConnection、
+          # ServiceBus__ConnectionString，多出來的 Jwt__Key 用不到但不影響（只是多一個沒用到
+          # 的環境變數）。
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}

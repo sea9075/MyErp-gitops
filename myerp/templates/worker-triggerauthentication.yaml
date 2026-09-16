@@ -1,0 +1,13 @@
+# 讓 KEDA 的 azure-servicebus scaler 知道要用哪組連線字串去問 Service Bus 佇列長度，
+# 直接複用 ExternalSecret 拉下來的同一包 Secret 裡的 ServiceBus__ConnectionString 這個
+# 欄位（parameter: connection 是 KEDA azure-servicebus scaler 固定認得的參數名稱）。
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: myerp-worker-servicebus-auth
+  namespace: {{ .Values.namespace }}
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: {{ .Values.secretName }}
+      key: ServiceBus__ConnectionString

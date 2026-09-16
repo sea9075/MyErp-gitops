@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: myerp-api
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: myerp-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myerp-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: myerp-api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app: myerp-api
+  template:
+    metadata:
+      labels:
+        app: myerp-api
+    spec:
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecretName }}
+      containers:
+        - name: myerp-api
+          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag }}"
+          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.containerPort }}
+          # envFrom 整包注入 ExternalSecret 產生的 Secret（ConnectionStrings__DefaultConnection、
+          # Jwt__Key、ServiceBus__ConnectionString，見 externalsecret.yaml），".NET 設定系統
+          # 用 "__" 代表 ":" 階層，不需要逐一手動對應成 env 名稱。
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          # /healthz 是 Program.cs 專門為這裡新增的端點（不用 Swagger，正式環境本來就關閉；
+          # 也不用 JWT），見 MyErp.Api/Program.cs 2026-09-16 的變更。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20

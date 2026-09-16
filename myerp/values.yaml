@@ -1,0 +1,92 @@
+# MyERP Helm chart 預設值。
+#
+# CI（MyERP repo 的 .github/workflows/ci-cd.yml）每次 push 到 main 都只會用 yq 動態改
+# image.api.tag / image.worker.tag 這兩個欄位，其餘欄位是一次性的環境設定，改了才需要
+# 手動 commit + push 這個 repo。
+
+namespace: myerp
+
+image:
+  api:
+    repository: myerpacr.azurecr.io/myerp-api
+    tag: "latest"   # 會被 CI 動態覆蓋成 git short commit SHA，這裡的值只在第一次手動測試時用得到
+    pullPolicy: IfNotPresent
+  worker:
+    repository: myerpacr.azurecr.io/myerp-worker
+    tag: "latest"   # 同上
+    pullPolicy: IfNotPresent
+
+# 叢集端手動建立、不會進 git 的 imagePullSecret 名稱（ACR Admin user 帳密，見 README）。
+imagePullSecretName: myerp-acr-credentials
+
+# ExternalSecret 從 Key Vault 拉下來、給 api/worker 兩個 Deployment 共用的 K8s Secret 名稱。
+secretName: myerp-app-secrets
+
+api:
+  replicaCount: 1
+  containerPort: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 150Mi
+    limits:
+      cpu: 500m
+      memory: 300Mi
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+route:
+  # 沿用既有的 Gateway（Infra-Progress.md §17 已經建立好，這個 chart 不管理 Gateway 本身，
+  # 只管理 HTTPRoute）。
+  gatewayName: myerp-gateway
+  hostname: myerp-api.kuei.dev
+
+worker:
+  # 初始 0：沒有訊息時完全不佔用叢集資源，實際要拉起幾個 replica由下面 keda 設定接手決定
+  # （KEDA 建立 ScaledObject 之後，這個 Deployment 的 replicas 欄位就交給 KEDA 動態調整，
+  # 這裡的初始值只在 ScaledObject 還沒生效的瞬間有意義）。
+  replicaCount: 0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 150Mi
+    limits:
+      cpu: 300m
+      memory: 300Mi
+  keda:
+    minReplicaCount: 0
+    maxReplicaCount: 3
+    queueName: sales-events
+    messageCount: "5"   # 佇列裡每累積 5 則未處理訊息，多拉一個 replica
+    pollingInterval: 30 # 每 30 秒問一次 Service Bus 佇列長度
+    cooldownPeriod: 120 # 佇列淨空後，要等 120 秒都沒有新訊息才縮回 0
+
+externalSecrets:
+  clusterSecretStoreName: azure-keyvault-store
+  refreshInterval: 1h
+  # secretKey：這個值最後在 K8s Secret／容器環境變數裡的欄位名稱。用雙底線是刻意的——
+  # .NET 設定系統讀環境變數時，"__" 代表設定階層的 ":"，例如 ConnectionStrings__DefaultConnection
+  # 會被 .NET 自動對應成 appsettings.json 裡的 ConnectionStrings:DefaultConnection，
+  # Deployment 才能直接用 envFrom 整包注入給 api/worker，不用逐一手動映射。
+  # remoteKey：對應 Azure Key Vault 裡實際的 secret 名稱（需要使用者自己先在 Key Vault
+  # 建立，見 README「Azure 端一次性設定」）。
+  mappings:
+    - secretKey: ConnectionStrings__DefaultConnection
+      remoteKey: SqlConnectionString
+    - secretKey: Jwt__Key
+      remoteKey: JwtSigningKey
+    - secretKey: ServiceBus__ConnectionString
+      remoteKey: ServiceBusConnectionString
+
+azureKeyVault:
+  vaultUrl: "https://myerp-kv.vault.azure.net"
+  tenantId: "2ba42280-e125-4220-b9b6-0f8f11218678"   
+  # TODO：填入 Azure AD 租戶 ID（Azure Portal → Microsoft Entra ID → 概觀 → 租用戶 ID）
+  # 存放 Service Principal Client ID/Secret 的 K8s Secret 名稱與所在 namespace——這是整個
+  # 機密管理鏈唯一一個不進 git、要手動 kubectl create 的「起點」機密（見 README「雞生蛋問題」）。
+  spCredentialsSecretName: azure-sp-credentials
+  spCredentialsSecretNamespace: myerp
