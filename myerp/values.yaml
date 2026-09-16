@@ -8,11 +8,11 @@ namespace: myerp
 image:
   api:
     repository: myerpacr.azurecr.io/myerp-api
-    tag: "e428142" # 會被 CI 動態覆蓋成 git short commit SHA，這裡的值只在第一次手動測試時用得到
+    tag: "12bd39d" # 會被 CI 動態覆蓋成 git short commit SHA，這裡的值只在第一次手動測試時用得到
     pullPolicy: IfNotPresent
   worker:
     repository: myerpacr.azurecr.io/myerp-worker
-    tag: "e428142" # 同上
+    tag: "12bd39d" # 同上
     pullPolicy: IfNotPresent
 # 叢集端手動建立、不會進 git 的 imagePullSecret 名稱（ACR Admin user 帳密，見 README）。
 imagePullSecretName: myerp-acr-credentials
